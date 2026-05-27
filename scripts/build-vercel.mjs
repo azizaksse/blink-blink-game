@@ -33,6 +33,19 @@ const funcDir = path.join(out, "functions", "__server.func");
 console.log("→ Copying server function...");
 copyDir(distServer, funcDir);
 
+// Override runtime in .vc-config.json to nodejs20.x (fully supported by Vercel)
+const vcConfigPath = path.join(funcDir, ".vc-config.json");
+if (fs.existsSync(vcConfigPath)) {
+  console.log("→ Overriding .vc-config.json runtime to nodejs20.x...");
+  try {
+    const vcConfig = JSON.parse(fs.readFileSync(vcConfigPath, "utf8"));
+    vcConfig.runtime = "nodejs20.x";
+    fs.writeFileSync(vcConfigPath, JSON.stringify(vcConfig, null, 2));
+  } catch (err) {
+    console.error("Failed to update .vc-config.json:", err);
+  }
+}
+
 // 3. Write Vercel Build Output API config.json
 console.log("→ Writing .vercel/output/config.json...");
 const config = {
