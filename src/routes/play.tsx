@@ -265,8 +265,9 @@ function PlayPage() {
     const ctx = canvas.getContext("2d")!;
     const keys = new Set<string>();
 
-    let parsed = parseStage(STAGES[stageIdxRef.current]);
+    let parsed = parseStage(STAGES[stageIdxRef.current].map);
     let stage = parsed.stage;
+    let ghostSpeedMult = STAGES[stageIdxRef.current].ghostSpeed;
     let dotsEaten = 0;
     let lives = 3;
     let stageDone = false;
@@ -294,7 +295,7 @@ function PlayPage() {
       return {
         color: palette[i % palette.length],
         cell: { ...c }, next: { ...c },
-        dir: { x: 0, y: 0 }, t: 0, speed: 3.5 + Math.random() * 0.8, home: { ...c },
+        dir: { x: 0, y: 0 }, t: 0, speed: (3.2 + Math.random() * 0.7) * ghostSpeedMult, home: { ...c },
       };
     }
 
@@ -309,8 +310,9 @@ function PlayPage() {
     function loadStage(idx: number) {
       stageIdxRef.current = idx;
       setStageIdx(idx);
-      parsed = parseStage(STAGES[idx]);
+      parsed = parseStage(STAGES[idx].map);
       stage = parsed.stage;
+      ghostSpeedMult = STAGES[idx].ghostSpeed;
       canvas.width = stage.W * TILE;
       canvas.height = stage.H * TILE;
       ghosts = parsed.ghostStarts.map((g, i) => makeGhost(g, i));
