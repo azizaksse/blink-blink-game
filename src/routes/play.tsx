@@ -167,6 +167,97 @@ function eatAt(stage: Stage, x: number, y: number): "dot" | "power" | null {
 // Local mock records if Convex offline
 type LocalRecord = { stageIdx: number; scoreSeconds: number; date: string };
 
+// ─── Web Audio Sound Engine ────────────────────────────────────────────────
+class SoundEngine {
+  private ctx: AudioContext | null = null;
+  private dotTick = 0; // alternates pitch like classic Pac-Man
+
+  private getCtx(): AudioContext {
+    if (!this.ctx) this.ctx = new AudioContext();
+    if (this.ctx.state === "suspended") this.ctx.resume();
+    return this.ctx;
+  }
+
+  private tone(
+    freq: number, type: OscillatorType, vol: number,
+    start: number, dur: number, endFreq?: number
+  ) {
+    const ctx = this.getCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.type = type;
+    osc.frequency.setValueAtTime(freq, ctx.currentTime + start);
+    if (endFreq !== undefined)
+      osc.frequency.linearRampToValueAtTime(endFreq, ctx.currentTime + start + dur);
+    gain.gain.setValueAtTime(vol, ctx.currentTime + start);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + start + dur);
+    osc.start(ctx.currentTime + start);
+    osc.stop(ctx.currentTime + start + dur + 0.01);
+  }
+
+  dot() {
+    // Alternating blip — classic Pac-Man feel
+    const f = this.dotTick % 2 === 0 ? 440 : 494;
+    this.dotTick++;
+    this.tone(f, "square", 0.12, 0, 0.06);
+  }
+
+  power() {
+    // Rising power-up sweep
+    this.tone(220, "sawtooth", 0.18, 0,    0.12, 440);
+    this.tone(440, "sawtooth", 0.15, 0.1,  0.15, 880);
+    this.tone(880, "sine",     0.12, 0.22, 0.2);
+  }
+
+  ghostEaten() {
+    // Ascending chord — reward hit
+    this.tone(330, "sine", 0.18, 0,    0.08);
+    this.tone(523, "sine", 0.18, 0.07, 0.08);
+    this.tone(659, "sine", 0.18, 0.14, 0.1);
+  }
+
+  death() {
+    // Classic descending glissando
+    this.tone(494, "sawtooth", 0.2,  0,    0.12, 330);
+    this.tone(330, "sawtooth", 0.18, 0.1,  0.14, 220);
+    this.tone(220, "sawtooth", 0.15, 0.22, 0.18, 110);
+    this.tone(110, "sawtooth", 0.12, 0.38, 0.25, 55);
+  }
+
+  gameOver() {
+    // Slow, heavy descending fanfare
+    this.tone(392, "sawtooth", 0.22, 0,    0.25, 330);
+    this.tone(330, "sawtooth", 0.2,  0.22, 0.25, 262);
+    this.tone(262, "sawtooth", 0.18, 0.44, 0.3,  196);
+    this.tone(196, "sawtooth", 0.16, 0.7,  0.5,  98);
+  }
+
+  stageClear() {
+    // Triumphant ascending fanfare
+    const notes = [523, 659, 784, 1047];
+    notes.forEach((f, i) => this.tone(f, "sine", 0.2, i * 0.1, 0.15));
+    this.tone(1047, "sine", 0.25, 0.45, 0.4);
+  }
+
+  freeze() {
+    // Icy crystalline shimmer — May skill
+    for (let i = 0; i < 5; i++) {
+      this.tone(1200 + i * 300, "sine", 0.1, i * 0.04, 0.18);
+    }
+  }
+
+  blazeDash() {
+    // Low fire whoosh — Cody skill
+    this.tone(80,  "sawtooth", 0.22, 0,    0.08, 160);
+    this.tone(160, "sawtooth", 0.18, 0.06, 0.1,  80);
+    this.tone(240, "square",   0.12, 0.12, 0.15, 60);
+  }
+}
+
+const sfx = new SoundEngine();
+// ──────────────────────────────────────────────────────────────────────────
+
 function PlayPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
@@ -330,6 +421,7 @@ function PlayPage() {
       if (Date.now() < maySkillCooldown) return; // Cooldown active
       setMaySkillCooldown(Date.now() + 12000); // 12 seconds cooldown
       setGhostsFrozen(true);
+      sfx.freeze();
       setTimeout(() => setGhostsFrozen(false), 4000); // 4 seconds freeze
 
       // Sync skill triggers
@@ -352,6 +444,7 @@ function PlayPage() {
       setCodyDashing(true);
       setTimeout(() => setCodyDashing(false), 3000); // 3 seconds speed dash
 
+      sfx.blazeDash();
       if (playMode === "online") {
         if (isConvexConfigured) {
           useAbilityMut({ roomCode, role: "cody" });
@@ -757,7 +850,8 @@ function PlayPage() {
         const eaten = eatAt(stage, p.next.x, p.next.y);
         if (eaten) {
           dotsEaten++;
-          if (eaten === "power") stage.powerUntil = performance.now() + 6000;
+          if (eaten === "power") { stage.powerUntil = performance.now() + 6000; sfx.power(); }
+          else sfx.dot();
           burst((p.next.x + 0.5) * TILE, (p.next.y + 0.5) * TILE, "#ffd76a", eaten === "power" ? 16 : 4);
           setScore({ dots: dotsEaten, total: stage.totalDots, lives });
 
@@ -939,6 +1033,7 @@ function PlayPage() {
             const pp = playerPixel(p), gp = ghostPixel(g);
             if (Math.hypot(pp.x - gp.x, pp.y - gp.y) < TILE * 0.6) {
               if (powered) {
+                sfx.ghostEaten();
                 burst(gp.x, gp.y, g.color, 20);
                 g.cell = { ...g.home }; g.next = { ...g.home }; g.dir = { x: 0, y: 0 }; g.t = 0;
               } else {
@@ -961,10 +1056,12 @@ function PlayPage() {
                 }
                 
                 if (lives <= 0) {
+                  sfx.gameOver();
                   setStatus("lost");
                   stageDone = true;
                   setScore({ dots: dotsEaten, total: stage.totalDots, lives: 0 });
                 } else {
+                  sfx.death();
                   resetPositions();
                   setScore({ dots: dotsEaten, total: stage.totalDots, lives });
                 }
@@ -980,6 +1077,7 @@ function PlayPage() {
 
         if (!stageDone && totalActiveEaten >= stage.totalDots) {
           stageDone = true;
+          sfx.stageClear();
           setStatus("won");
           const durationSeconds = Math.max(1, Math.round((Date.now() - startTime) / 1000));
           
