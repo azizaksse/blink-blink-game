@@ -21,81 +21,163 @@ export const Route = createFileRoute("/play")({
 type Cell = { x: number; y: number };
 type Dir = { x: number; y: number };
 
-const STAGES: string[][] = [
-  [
-    "####################",
-    "#M.......##.......C#",
-    "#.##.###.##.###.##.#",
-    "#o##.###....###.##o#",
-    "#..................#",
-    "#.##.#.######.#.##.#",
-    "#....#...##...#....#",
-    "####.### ## ###.####",
-    "   #.#   G    #.#   ",
-    "####.# ###### #.####",
-    "    .  #    #  .    ",
-    "####.# ###### #.####",
-    "   #.#   G    #.#   ",
-    "####.# ###### #.####",
-    "#........##........#",
-    "#.##.###.##.###.##.#",
-    "#o.#............#.o#",
-    "##.#.#.######.#.#.##",
-    "#....#...##...#....#",
-    "####################",
-  ],
-  [
-    "####################",
-    "#M...#........#...C#",
-    "#.##.#.######.#.##.#",
-    "#.##...#    #...##.#",
-    "#....#.# GG #.#....#",
-    "####.#.######.#.####",
-    "   #.#........#.#   ",
-    "####.# ###### #.####",
-    "o.......#  #.......o",
-    "####.## #  # ##.####",
-    "   #.##      ##.#   ",
-    "####.##########.####",
-    "#........##........#",
-    "#.######.##.######.#",
-    "#o..............o..#",
-    "###.##.######.##.###",
-    "#......#    #......#",
-    "#.####.# ## #.####.#",
-    "#...................#".slice(0,20),
-    "####################",
-  ],
-  [
-    "####################",
-    "#M.....o..##..o....#",
-    "#.####.##.##.##.##.#",
-    "#.#  #.##....##..#.#",
-    "#.#G #.####.####.#.#",
-    "#.#  #..............#".slice(0,20),
-    "#.####.####.####.#.#",
-    "#......#  #.#....#.#",
-    "######.#  #.#.####.#",
-    "     #.#GG#.#.     ",
-    "######.####.#.######",
-    "#..........#.......#",
-    "#.########.#.#####.#",
-    "#o#......#.#.....#o#",
-    "#.#.####.#.#.###.#.#",
-    "#...#  #...#...#...#",
-    "###.#.############.#",
-    "#...#..............#",
-    "#.################C#",
-    "####################",
-  ],
+const STAGES: { ghostSpeed: number; map: string[] }[] = [
+  { ghostSpeed: 0.65, map: [
+    "###############",
+    "#M...........C#",
+    "#.###.###.###.#",
+    "#......G......#",
+    "#.###.###.###.#",
+    "#.............#",
+    "#.###.###.###.#",
+    "#......o......#",
+    "#.###.###.###.#",
+    "#o...........o#",
+    "###############",
+  ]},
+  { ghostSpeed: 0.8, map: [
+    "###############",
+    "#M.....#.....C#",
+    "#.###.#.#.###.#",
+    "#.............#",
+    "#.#.#######.#.#",
+    "#.#....G....#.#",
+    "#.#.#######.#.#",
+    "#.............#",
+    "#.###.#.#.###.#",
+    "#o.....#.....o#",
+    "###############",
+  ]},
+  { ghostSpeed: 0.9, map: [
+    "###############",
+    "#M...........C#",
+    "#.##.#####.##.#",
+    "#....#...#....#",
+    "#.##.#.G.#.##.#",
+    "#.##.#####.##.#",
+    "#......G......#",
+    "#.##.#####.##.#",
+    "#.##.#...#.##.#",
+    "#o...#.o.#...o#",
+    "###############",
+  ]},
+  { ghostSpeed: 1.0, map: [
+    "###############",
+    "#M...#...#...C#",
+    "#.##.#.#.#.##.#",
+    "#.............#",
+    "###.#######.###",
+    "....#.G.G.#....",
+    "###.#######.###",
+    "#.............#",
+    "#.##.#####.##.#",
+    "#o.....o.....o#",
+    "###############",
+  ]},
+  { ghostSpeed: 1.05, map: [
+    "###############",
+    "#M.....#.....C#",
+    "#.###.###.###.#",
+    "#.G.........G.#",
+    "#.###.###.###.#",
+    "#.....#.#.....#",
+    "#####.#.#.#####",
+    "#.....#.#.....#",
+    "#.###.###.###.#",
+    "#......G......#",
+    "#.###.###.###.#",
+    "#o...........o#",
+    "###############",
+  ]},
+  { ghostSpeed: 1.1, map: [
+    "###############",
+    "#M..#.....#..C#",
+    "#.#.#.###.#.#.#",
+    "#.#.....G...#.#",
+    "#.#.###.###.#.#",
+    "#.#...G.G...#.#",
+    "#.###.#.#.###.#",
+    "#.............#",
+    "#.###.#.#.###.#",
+    "#.#.........#.#",
+    "#.#.#######.#.#",
+    "#o..#.....#..o#",
+    "###############",
+  ]},
+  { ghostSpeed: 1.15, map: [
+    "###############",
+    "#M...........C#",
+    "#.###.###.###.#",
+    "#.#.G.....G.#.#",
+    "#.#.#####.#.#.#",
+    "#.....#G#.....#",
+    "#.###.#G#.###.#",
+    "#.....###.....#",
+    "#.#.#######.#.#",
+    "#.#.........#.#",
+    "#.#.#######.#.#",
+    "#o...........o#",
+    "###############",
+  ]},
+  { ghostSpeed: 1.2, map: [
+    "###############",
+    "#M...#...G...C#",
+    "#.##.#.#####.#",
+    "#.G..#.......#",
+    "#.####.#####.#",
+    "#......#.....#",
+    "######.###.####",
+    "...G..........",
+    "######.###.####",
+    "#......#.....#",
+    "#.####.######.#",
+    "#.G..#........#",
+    "#.##.#.######.#",
+    "#o...#.......o#",
+    "###############",
+  ]},
+  { ghostSpeed: 1.3, map: [
+    "###############",
+    "#M...........C#",
+    "#.#.#######.#.#",
+    "#.#.........#.#",
+    "#.#.##.#.##.#.#",
+    "#.G..#.G.#..G.#",
+    "###.#######.###",
+    "....#.....#....",
+    "###.#.###.#.###",
+    "#.G.#.....#.G.#",
+    "#.###.###.###.#",
+    "#.....#.#.....#",
+    "#.###.#.#.###.#",
+    "#o...........o#",
+    "###############",
+  ]},
+  { ghostSpeed: 1.6, map: [
+    "###############",
+    "#M.#.......#.C#",
+    "#..#.#####.#..#",
+    "#.##.G...G.##.#",
+    "#.............#",
+    "#.##.#####.##.#",
+    "#.G..#GGG#..G.#",
+    "#.##.#####.##.#",
+    "#.............#",
+    "#.##.#####.##.#",
+    "#.#..G...G..#.#",
+    "#.#.#######.#.#",
+    "#..#.......#..#",
+    "#o.#.......#.o#",
+    "###############",
+  ]},
 ];
 
 // sanitize: ensure each row is exactly the width of row 0 in its stage
 for (const s of STAGES) {
-  const w = s[0].length;
-  for (let i = 0; i < s.length; i++) {
-    if (s[i].length < w) s[i] = s[i] + " ".repeat(w - s[i].length);
-    else if (s[i].length > w) s[i] = s[i].slice(0, w);
+  const w = s.map[0].length;
+  for (let i = 0; i < s.map.length; i++) {
+    if (s.map[i].length < w) s.map[i] = s.map[i] + " ".repeat(w - s.map[i].length);
+    else if (s.map[i].length > w) s.map[i] = s.map[i].slice(0, w);
   }
 }
 
@@ -178,13 +260,22 @@ function PlayPage() {
   const stageIdxRef = useRef(0);
   const advanceRef = useRef<() => void>(() => {});
 
+  function touchMove(who: "may" | "cody", dir: "up" | "down" | "left" | "right") {
+    const keyMap = {
+      may: { up: "w", down: "s", left: "a", right: "d" },
+      cody: { up: "ArrowUp", down: "ArrowDown", left: "ArrowLeft", right: "ArrowRight" },
+    } as const;
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: keyMap[who][dir] }));
+  }
+
   useEffect(() => {
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext("2d")!;
     const keys = new Set<string>();
 
-    let parsed = parseStage(STAGES[stageIdxRef.current]);
+    let parsed = parseStage(STAGES[stageIdxRef.current].map);
     let stage = parsed.stage;
+    let ghostSpeedMult = STAGES[stageIdxRef.current].ghostSpeed;
     let dotsEaten = 0;
     let lives = 3;
     let stageDone = false;
@@ -212,7 +303,7 @@ function PlayPage() {
       return {
         color: palette[i % palette.length],
         cell: { ...c }, next: { ...c },
-        dir: { x: 0, y: 0 }, t: 0, speed: 3.5 + Math.random() * 0.8, home: { ...c },
+        dir: { x: 0, y: 0 }, t: 0, speed: (3.2 + Math.random() * 0.7) * ghostSpeedMult, home: { ...c },
       };
     }
 
@@ -227,8 +318,9 @@ function PlayPage() {
     function loadStage(idx: number) {
       stageIdxRef.current = idx;
       setStageIdx(idx);
-      parsed = parseStage(STAGES[idx]);
+      parsed = parseStage(STAGES[idx].map);
       stage = parsed.stage;
+      ghostSpeedMult = STAGES[idx].ghostSpeed;
       canvas.width = stage.W * TILE;
       canvas.height = stage.H * TILE;
       ghosts = parsed.ghostStarts.map((g, i) => makeGhost(g, i));
@@ -492,45 +584,45 @@ function PlayPage() {
   }, []);
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center p-6 gap-6">
+    <div className="min-h-screen flex flex-col items-center p-3 sm:p-6 gap-3 sm:gap-4">
       <div className="flex items-center justify-between w-full max-w-4xl">
         <Link to="/" className="flex items-center gap-2 text-xs uppercase tracking-[0.25em] text-muted-foreground hover:text-foreground transition">
-          <Home className="w-4 h-4" /> Home
+          <Home className="w-4 h-4" /> <span className="hidden sm:inline">Home</span>
         </Link>
-        <div className="font-display font-black text-xl tracking-widest">
+        <div className="font-display font-black text-base sm:text-xl tracking-widest">
           <span className="text-may">MAY</span> <span className="text-muted-foreground">×</span> <span className="text-cody">CODY</span>
         </div>
         <button onClick={() => location.reload()} className="flex items-center gap-2 text-xs uppercase tracking-[0.25em] text-muted-foreground hover:text-foreground transition">
-          <RotateCcw className="w-4 h-4" /> Restart
+          <RotateCcw className="w-4 h-4" /> <span className="hidden sm:inline">Restart</span>
         </button>
       </div>
 
-      <div className="flex items-center gap-6 text-xs uppercase tracking-[0.25em] text-muted-foreground">
-        <span>Stage <span className="text-foreground font-bold">{stageIdx + 1}</span> / {STAGES.length}</span>
-        <span>Dots <span className="text-accent font-bold">{score.dots}</span> / {score.total}</span>
+      <div className="flex items-center gap-3 sm:gap-6 text-[10px] sm:text-xs uppercase tracking-[0.2em] text-muted-foreground">
+        <span>Stage <span className="text-foreground font-bold">{stageIdx + 1}</span>/{STAGES.length}</span>
+        <span>Dots <span className="text-accent font-bold">{score.dots}</span>/{score.total}</span>
         <span>Lives <span className="text-cody font-bold">{"♥".repeat(Math.max(0, score.lives))}</span></span>
       </div>
 
-      <div className="relative w-full max-w-4xl">
+      <div className="relative w-full max-w-4xl flex justify-center">
         <canvas ref={canvasRef}
-          className="w-full h-auto rounded-sm border border-border bg-background block" />
+          className="max-w-full max-h-[50vh] w-auto h-auto rounded-sm border border-border bg-background block touch-none" />
         {status === "won" && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-md rounded-sm">
-            <div className="text-center space-y-4">
-              <Trophy className="w-12 h-12 mx-auto text-accent animate-pulse-glow" />
-              <h2 className="font-display font-black text-5xl text-duo italic">
+            <div className="text-center space-y-3 px-4">
+              <Trophy className="w-10 h-10 mx-auto text-accent animate-pulse-glow" />
+              <h2 className="font-display font-black text-3xl sm:text-5xl text-duo italic">
                 {score.lives <= 0 ? "Caught." : "Cleared."}
               </h2>
-              <p className="text-muted-foreground">
+              <p className="text-muted-foreground text-xs sm:text-base">
                 {score.dots} / {score.total} dots · Stage {stageIdx + 1}
               </p>
-              <div className="flex gap-3 justify-center">
+              <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 justify-center">
                 {score.lives > 0 && stageIdx + 1 < STAGES.length && (
-                  <button onClick={() => advanceRef.current()} className="bg-duo text-primary-foreground px-8 py-3 text-xs uppercase tracking-[0.2em] font-bold rounded-sm">
+                  <button onClick={() => advanceRef.current()} className="bg-duo text-primary-foreground px-6 py-3 text-xs uppercase tracking-[0.2em] font-bold rounded-sm">
                     Next Stage →
                   </button>
                 )}
-                <button onClick={() => location.reload()} className="border border-border text-foreground px-8 py-3 text-xs uppercase tracking-[0.2em] font-bold rounded-sm">
+                <button onClick={() => location.reload()} className="border border-border text-foreground px-6 py-3 text-xs uppercase tracking-[0.2em] font-bold rounded-sm">
                   Restart
                 </button>
               </div>
@@ -539,32 +631,53 @@ function PlayPage() {
         )}
       </div>
 
-      <div className="grid grid-cols-2 gap-3 w-full max-w-4xl text-xs">
-        <ControlCard color="may" name="May" icon={<Snowflake className="w-4 h-4" />}
-          keys={[["W A S D", "move through maze"]]} />
-        <ControlCard color="cody" name="Cody" icon={<Flame className="w-4 h-4" />}
-          keys={[["← ↑ → ↓", "move through maze"]]} />
+      {/* Touch d-pads — two players on one phone */}
+      <div className="grid grid-cols-2 gap-4 w-full max-w-md mt-2">
+        <DPad color="may" name="May" icon={<Snowflake className="w-3 h-3" />}
+          onMove={(d) => touchMove("may", d)} />
+        <DPad color="cody" name="Cody" icon={<Flame className="w-3 h-3" />}
+          onMove={(d) => touchMove("cody", d)} />
       </div>
-      <p className="text-xs text-muted-foreground uppercase tracking-[0.25em] text-center max-w-xl">
-        Eat every dot to clear the stage. Power pellets let you eat ghosts. Press R to restart.
+      <p className="hidden sm:block text-xs text-muted-foreground uppercase tracking-[0.25em] text-center max-w-xl">
+        Eat every dot. Power pellets let you eat ghosts. Keyboard: WASD + Arrows · R to restart.
       </p>
     </div>
   );
 }
 
-function ControlCard({ color, name, icon, keys }: { color: "may" | "cody"; name: string; icon: React.ReactNode; keys: [string, string][] }) {
+function DPad({ color, name, icon, onMove }: {
+  color: "may" | "cody"; name: string; icon: React.ReactNode;
+  onMove: (d: "up" | "down" | "left" | "right") => void;
+}) {
+  const isMay = color === "may";
+  const textColor = isMay ? "text-may" : "text-cody";
+  const btnCls = isMay
+    ? "bg-[oklch(0.68_0.18_240/0.15)] active:bg-[oklch(0.68_0.18_240/0.45)] border-[oklch(0.68_0.18_240/0.6)] text-may"
+    : "bg-[oklch(0.66_0.22_28/0.15)] active:bg-[oklch(0.66_0.22_28/0.45)] border-[oklch(0.66_0.22_28/0.6)] text-cody";
+  const Btn = ({ d, children }: { d: "up"|"down"|"left"|"right"; children: React.ReactNode }) => (
+    <button
+      onPointerDown={(e) => { e.preventDefault(); onMove(d); }}
+      className={`${btnCls} border rounded-md font-bold text-base select-none active:scale-95 transition flex items-center justify-center`}
+      style={{ touchAction: "none" }}
+    >
+      {children}
+    </button>
+  );
   return (
-    <div className={`p-4 rounded-sm bg-card/60 backdrop-blur ${color === "may" ? "ring-may" : "ring-cody"}`}>
-      <div className={`flex items-center gap-2 mb-3 ${color === "may" ? "text-may" : "text-cody"} font-display font-bold tracking-widest`}>
+    <div className="flex flex-col items-center gap-2">
+      <div className={`flex items-center gap-1.5 ${textColor} font-display font-bold tracking-widest text-[10px]`}>
         {icon} {name.toUpperCase()}
       </div>
-      <div className="space-y-1.5">
-        {keys.map(([k, v]) => (
-          <div key={k} className="flex justify-between text-muted-foreground">
-            <kbd className="px-2 py-0.5 bg-background/60 border border-border rounded text-foreground font-mono text-[10px]">{k}</kbd>
-            <span className="uppercase tracking-wider text-[10px]">{v}</span>
-          </div>
-        ))}
+      <div className="grid grid-cols-3 grid-rows-3 gap-1 w-32 h-32">
+        <div />
+        <Btn d="up">▲</Btn>
+        <div />
+        <Btn d="left">◀</Btn>
+        <div />
+        <Btn d="right">▶</Btn>
+        <div />
+        <Btn d="down">▼</Btn>
+        <div />
       </div>
     </div>
   );
