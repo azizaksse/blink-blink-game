@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { Heart, Sparkles, Swords, Users2, Gamepad2, Play, Flame, Snowflake, ChevronRight } from "lucide-react";
 import hero from "@/assets/hero.jpg";
 import may from "@/assets/may.jpg";
@@ -54,9 +54,9 @@ function Nav() {
           <a href="#modes" className="hover:text-foreground transition">Modes</a>
           <a href="#play" className="hover:text-foreground transition">Play</a>
         </nav>
-        <button className="group relative px-5 py-2.5 bg-duo text-xs uppercase tracking-[0.2em] font-bold text-primary-foreground rounded-sm overflow-hidden">
+        <Link to="/play" className="group relative px-5 py-2.5 bg-duo text-xs uppercase tracking-[0.2em] font-bold text-primary-foreground rounded-sm overflow-hidden">
           <span className="relative z-10 flex items-center gap-2">Play Now <ChevronRight className="w-3 h-3" /></span>
-        </button>
+        </Link>
       </div>
     </header>
   );
@@ -85,9 +85,9 @@ function Hero() {
             across a world that breaks every rule — together, or not at all.
           </p>
           <div className="flex flex-wrap items-center gap-4 pt-4">
-            <button className="group flex items-center gap-3 bg-duo text-primary-foreground px-8 py-4 font-bold uppercase tracking-[0.15em] text-sm rounded-sm">
+            <Link to="/play" className="group flex items-center gap-3 bg-duo text-primary-foreground px-8 py-4 font-bold uppercase tracking-[0.15em] text-sm rounded-sm">
               <Play className="w-4 h-4 fill-current" /> Begin the Journey
-            </button>
+            </Link>
             <button className="flex items-center gap-3 border border-border/80 bg-background/40 backdrop-blur px-8 py-4 font-bold uppercase tracking-[0.15em] text-sm rounded-sm hover:bg-card transition">
               Watch Trailer
             </button>
@@ -289,9 +289,9 @@ function CTA() {
           One copy. Two players. Endless invention. Cross-platform Friend Pass included.
         </p>
         <div className="flex flex-wrap justify-center gap-4 pt-6">
-          <button className="bg-duo text-primary-foreground px-10 py-5 font-bold uppercase tracking-[0.15em] text-sm rounded-sm">
+          <Link to="/play" className="bg-duo text-primary-foreground px-10 py-5 font-bold uppercase tracking-[0.15em] text-sm rounded-sm">
             Start Adventure
-          </button>
+          </Link>
           <button className="border border-border bg-card/40 backdrop-blur px-10 py-5 font-bold uppercase tracking-[0.15em] text-sm rounded-sm hover:bg-card transition">
             Send Friend Pass
           </button>
