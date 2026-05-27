@@ -260,6 +260,14 @@ function PlayPage() {
   const stageIdxRef = useRef(0);
   const advanceRef = useRef<() => void>(() => {});
 
+  function touchMove(who: "may" | "cody", dir: "up" | "down" | "left" | "right") {
+    const keyMap = {
+      may: { up: "w", down: "s", left: "a", right: "d" },
+      cody: { up: "ArrowUp", down: "ArrowDown", left: "ArrowLeft", right: "ArrowRight" },
+    } as const;
+    window.dispatchEvent(new KeyboardEvent("keydown", { key: keyMap[who][dir] }));
+  }
+
   useEffect(() => {
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext("2d")!;
