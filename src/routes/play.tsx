@@ -6,122 +6,360 @@ export const Route = createFileRoute("/play")({
   head: () => ({
     meta: [
       { title: "Play — It Takes Two" },
-      { name: "description", content: "A tiny co-op platformer. Two players, one keyboard." },
+      { name: "description", content: "A co-op Pac-Man-style maze. Two players, one keyboard, many stages." },
     ],
   }),
   component: PlayPage,
 });
 
-// ---------- Game ----------
-type Vec = { x: number; y: number };
+// ---------- Pac-Man-style co-op ----------
+// Legend in stage strings:
+//  # wall   . dot   o power pellet
+//  M May spawn   C Cody spawn   G ghost spawn
+//  (space) empty corridor
+
+type Cell = { x: number; y: number };
+type Dir = { x: number; y: number };
+
+const STAGES: string[][] = [
+  [
+    "####################",
+    "#M.......##.......C#",
+    "#.##.###.##.###.##.#",
+    "#o##.###....###.##o#",
+    "#..................#",
+    "#.##.#.######.#.##.#",
+    "#....#...##...#....#",
+    "####.### ## ###.####",
+    "   #.#   G    #.#   ",
+    "####.# ###### #.####",
+    "    .  #    #  .    ",
+    "####.# ###### #.####",
+    "   #.#   G    #.#   ",
+    "####.# ###### #.####",
+    "#........##........#",
+    "#.##.###.##.###.##.#",
+    "#o.#............#.o#",
+    "##.#.#.######.#.#.##",
+    "#....#...##...#....#",
+    "####################",
+  ],
+  [
+    "####################",
+    "#M...#........#...C#",
+    "#.##.#.######.#.##.#",
+    "#.##...#    #...##.#",
+    "#....#.# GG #.#....#",
+    "####.#.######.#.####",
+    "   #.#........#.#   ",
+    "####.# ###### #.####",
+    "o.......#  #.......o",
+    "####.## #  # ##.####",
+    "   #.##      ##.#   ",
+    "####.##########.####",
+    "#........##........#",
+    "#.######.##.######.#",
+    "#o..............o..#",
+    "###.##.######.##.###",
+    "#......#    #......#",
+    "#.####.# ## #.####.#",
+    "#...................#".slice(0,20),
+    "####################",
+  ],
+  [
+    "####################",
+    "#M.....o..##..o....#",
+    "#.####.##.##.##.##.#",
+    "#.#  #.##....##..#.#",
+    "#.#G #.####.####.#.#",
+    "#.#  #..............#".slice(0,20),
+    "#.####.####.####.#.#",
+    "#......#  #.#....#.#",
+    "######.#  #.#.####.#",
+    "     #.#GG#.#.     ",
+    "######.####.#.######",
+    "#..........#.......#",
+    "#.########.#.#####.#",
+    "#o#......#.#.....#o#",
+    "#.#.####.#.#.###.#.#",
+    "#...#  #...#...#...#",
+    "###.#.############.#",
+    "#...#..............#",
+    "#.################C#",
+    "####################",
+  ],
+];
+
+// sanitize: ensure each row is exactly the width of row 0 in its stage
+for (const s of STAGES) {
+  const w = s[0].length;
+  for (let i = 0; i < s.length; i++) {
+    if (s[i].length < w) s[i] = s[i] + " ".repeat(w - s[i].length);
+    else if (s[i].length > w) s[i] = s[i].slice(0, w);
+  }
+}
+
+const TILE = 24;
+const DIRS: Record<string, Dir> = {
+  up: { x: 0, y: -1 }, down: { x: 0, y: 1 },
+  left: { x: -1, y: 0 }, right: { x: 1, y: 0 },
+};
+
 type Player = {
-  pos: Vec; vel: Vec; w: number; h: number;
-  color: string; glow: string; name: "May" | "Cody";
-  onGround: boolean; jumpsLeft: number; dashCd: number;
-  facing: number; coyote: number;
-};
-type Platform = { x: number; y: number; w: number; h: number; kind?: "may" | "cody" | "normal" };
-type Pad = { x: number; y: number; w: number; h: number; owner: "may" | "cody"; pressed: boolean };
-
-const W = 960, H = 540;
-const GRAV = 0.65;
-const MOVE = 0.7, MAX_VX = 4.2, FRICTION = 0.82;
-const JUMP = 11;
-
-const LEVEL: { plats: Platform[]; pads: Pad[]; door: Platform; spawnA: Vec; spawnB: Vec; coins: Vec[] } = {
-  plats: [
-    { x: 0, y: H - 40, w: W, h: 40 },
-    { x: 140, y: 420, w: 120, h: 16 },
-    { x: 320, y: 360, w: 100, h: 16, kind: "may" },
-    { x: 480, y: 300, w: 120, h: 16 },
-    { x: 680, y: 240, w: 110, h: 16, kind: "cody" },
-    { x: 280, y: 200, w: 90, h: 16 },
-    { x: 60, y: 260, w: 90, h: 16 },
-    { x: 820, y: 380, w: 120, h: 16 },
-  ],
-  pads: [
-    { x: 80, y: H - 56, w: 60, h: 16, owner: "may", pressed: false },
-    { x: 820, y: H - 56, w: 60, h: 16, owner: "cody", pressed: false },
-  ],
-  door: { x: 440, y: H - 140, w: 60, h: 100 },
-  spawnA: { x: 60, y: H - 100 },
-  spawnB: { x: 880, y: H - 100 },
-  coins: [
-    { x: 200, y: 390 }, { x: 380, y: 330 }, { x: 540, y: 270 },
-    { x: 720, y: 210 }, { x: 320, y: 170 }, { x: 100, y: 230 },
-  ],
+  name: "May" | "Cody"; color: string; glow: string;
+  cell: Cell; next: Cell;        // grid cells (current + interpolating to)
+  dir: Dir; queued: Dir | null;
+  t: number;                       // 0..1 interpolation
+  speed: number;                   // tiles per second
+  alive: boolean;
 };
 
-function makePlayer(spawn: Vec, name: "May" | "Cody"): Player {
+type Ghost = {
+  color: string; cell: Cell; next: Cell; dir: Dir; t: number; speed: number; home: Cell;
+};
+
+type Stage = {
+  grid: string[];         // mutable copy (dots get eaten)
+  W: number; H: number;
+  totalDots: number;
+  powerUntil: number;     // performance.now() ms
+};
+
+function parseStage(raw: string[]): { stage: Stage; mayStart: Cell; codyStart: Cell; ghostStarts: Cell[] } {
+  const grid = raw.map(r => r.split(""));
+  let may: Cell = { x: 1, y: 1 }, cody: Cell = { x: 1, y: 1 };
+  const ghosts: Cell[] = [];
+  let dots = 0;
+  for (let y = 0; y < grid.length; y++) {
+    for (let x = 0; x < grid[y].length; x++) {
+      const c = grid[y][x];
+      if (c === "M") { may = { x, y }; grid[y][x] = "."; dots++; }
+      else if (c === "C") { cody = { x, y }; grid[y][x] = "."; dots++; }
+      else if (c === "G") { ghosts.push({ x, y }); grid[y][x] = " "; }
+      else if (c === ".") dots++;
+    }
+  }
   return {
-    pos: { ...spawn }, vel: { x: 0, y: 0 }, w: 26, h: 34,
-    color: name === "May" ? "#5aa9ff" : "#ff5a4d",
-    glow: name === "May" ? "rgba(90,169,255,0.55)" : "rgba(255,90,77,0.55)",
-    name, onGround: false, jumpsLeft: 2, dashCd: 0, facing: 1, coyote: 0,
+    stage: { grid: grid.map(r => r.join("")), W: grid[0].length, H: grid.length, totalDots: dots, powerUntil: 0 },
+    mayStart: may, codyStart: cody, ghostStarts: ghosts,
   };
+}
+
+function isWall(stage: Stage, x: number, y: number): boolean {
+  if (y < 0 || y >= stage.H) return true;
+  // horizontal tunnel wrap
+  const w = stage.W;
+  const xi = ((x % w) + w) % w;
+  return stage.grid[y][xi] === "#";
+}
+
+function wrapX(stage: Stage, x: number): number {
+  const w = stage.W;
+  return ((x % w) + w) % w;
+}
+
+function eatAt(stage: Stage, x: number, y: number): "dot" | "power" | null {
+  const row = stage.grid[y];
+  const ch = row[x];
+  if (ch === "." || ch === "o") {
+    stage.grid[y] = row.substring(0, x) + " " + row.substring(x + 1);
+    return ch === "." ? "dot" : "power";
+  }
+  return null;
 }
 
 function PlayPage() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [status, setStatus] = useState<"playing" | "won">("playing");
-  const [score, setScore] = useState({ coins: 0, time: 0 });
+  const [stageIdx, setStageIdx] = useState(0);
+  const [score, setScore] = useState({ dots: 0, total: 0, lives: 3 });
+
+  // refs that the render loop reads — keep latest stage index without resubscribing keys
+  const stageIdxRef = useRef(0);
+  const advanceRef = useRef<() => void>(() => {});
 
   useEffect(() => {
     const canvas = canvasRef.current!;
     const ctx = canvas.getContext("2d")!;
     const keys = new Set<string>();
 
-    const may = makePlayer(LEVEL.spawnA, "May");
-    const cody = makePlayer(LEVEL.spawnB, "Cody");
-    const pads = LEVEL.pads.map(p => ({ ...p }));
-    const coins = LEVEL.coins.map(c => ({ ...c, taken: false }));
-    let coinsCollected = 0;
-    let won = false;
-    let t0 = performance.now();
+    let parsed = parseStage(STAGES[stageIdxRef.current]);
+    let stage = parsed.stage;
+    let dotsEaten = 0;
+    let lives = 3;
+    let stageDone = false;
     let particles: { x: number; y: number; vx: number; vy: number; life: number; c: string }[] = [];
 
+    canvas.width = stage.W * TILE;
+    canvas.height = stage.H * TILE;
+
+    const may: Player = makePlayer("May", parsed.mayStart, "#5aa9ff", "rgba(90,169,255,0.55)");
+    const cody: Player = makePlayer("Cody", parsed.codyStart, "#ff5a4d", "rgba(255,90,77,0.55)");
+    let ghosts: Ghost[] = parsed.ghostStarts.map((g, i) => makeGhost(g, i));
+
+    setScore({ dots: 0, total: stage.totalDots, lives });
+
+    function makePlayer(name: "May" | "Cody", c: Cell, color: string, glow: string): Player {
+      return {
+        name, color, glow,
+        cell: { ...c }, next: { ...c },
+        dir: { x: 0, y: 0 }, queued: null,
+        t: 0, speed: 6, alive: true,
+      };
+    }
+    function makeGhost(c: Cell, i: number): Ghost {
+      const palette = ["#ff6ab2", "#a78bfa", "#fcd34d", "#5eead4"];
+      return {
+        color: palette[i % palette.length],
+        cell: { ...c }, next: { ...c },
+        dir: { x: 0, y: 0 }, t: 0, speed: 3.5 + Math.random() * 0.8, home: { ...c },
+      };
+    }
+
+    function resetPositions() {
+      may.cell = { ...parsed.mayStart }; may.next = { ...parsed.mayStart };
+      may.dir = { x: 0, y: 0 }; may.queued = null; may.t = 0; may.alive = true;
+      cody.cell = { ...parsed.codyStart }; cody.next = { ...parsed.codyStart };
+      cody.dir = { x: 0, y: 0 }; cody.queued = null; cody.t = 0; cody.alive = true;
+      ghosts.forEach(g => { g.cell = { ...g.home }; g.next = { ...g.home }; g.dir = { x: 0, y: 0 }; g.t = 0; });
+    }
+
+    function loadStage(idx: number) {
+      stageIdxRef.current = idx;
+      setStageIdx(idx);
+      parsed = parseStage(STAGES[idx]);
+      stage = parsed.stage;
+      canvas.width = stage.W * TILE;
+      canvas.height = stage.H * TILE;
+      ghosts = parsed.ghostStarts.map((g, i) => makeGhost(g, i));
+      resetPositions();
+      dotsEaten = 0;
+      stageDone = false;
+      setStatus("playing");
+      setScore({ dots: 0, total: stage.totalDots, lives });
+    }
+
+    advanceRef.current = () => {
+      const next = (stageIdxRef.current + 1) % STAGES.length;
+      loadStage(next);
+    };
+
     const onDown = (e: KeyboardEvent) => {
-      keys.add(e.key.toLowerCase());
-      if (["arrowup", "arrowdown", "arrowleft", "arrowright", " "].includes(e.key.toLowerCase())) e.preventDefault();
-      // jumps fire on keydown
-      if (e.key.toLowerCase() === "w") tryJump(may);
-      if (e.key === "ArrowUp") tryJump(cody);
-      if (e.key.toLowerCase() === "s") tryDash(may);
-      if (e.key === "ArrowDown") tryDash(cody);
-      if (e.key.toLowerCase() === "r") reset();
+      const k = e.key.toLowerCase();
+      keys.add(k);
+      if (["arrowup","arrowdown","arrowleft","arrowright"," "].includes(k)) e.preventDefault();
+      if (k === "w") may.queued = DIRS.up;
+      else if (k === "s") may.queued = DIRS.down;
+      else if (k === "a") may.queued = DIRS.left;
+      else if (k === "d") may.queued = DIRS.right;
+      if (e.key === "ArrowUp") cody.queued = DIRS.up;
+      else if (e.key === "ArrowDown") cody.queued = DIRS.down;
+      else if (e.key === "ArrowLeft") cody.queued = DIRS.left;
+      else if (e.key === "ArrowRight") cody.queued = DIRS.right;
+      if (k === "r") loadStage(stageIdxRef.current);
     };
     const onUp = (e: KeyboardEvent) => keys.delete(e.key.toLowerCase());
     window.addEventListener("keydown", onDown);
     window.addEventListener("keyup", onUp);
 
-    function reset() {
-      Object.assign(may, makePlayer(LEVEL.spawnA, "May"));
-      Object.assign(cody, makePlayer(LEVEL.spawnB, "Cody"));
-      pads.forEach(p => (p.pressed = false));
-      coins.forEach(c => (c.taken = false));
-      coinsCollected = 0;
-      won = false;
-      t0 = performance.now();
-      setStatus("playing");
-      setScore({ coins: 0, time: 0 });
-    }
+    function stepPlayer(p: Player, dt: number) {
+      if (!p.alive) return;
+      // If at cell boundary, pick direction
+      if (p.t >= 1 || (p.dir.x === 0 && p.dir.y === 0)) {
+        p.cell = { ...p.next };
+        p.t = 0;
+        // try queued
+        if (p.queued) {
+          const nx = p.cell.x + p.queued.x;
+          const ny = p.cell.y + p.queued.y;
+          if (!isWall(stage, nx, ny)) { p.dir = p.queued; }
+        }
+        // continue current
+        const cx = p.cell.x + p.dir.x;
+        const cy = p.cell.y + p.dir.y;
+        if (p.dir.x === 0 && p.dir.y === 0) return;
+        if (isWall(stage, cx, cy)) { p.dir = { x: 0, y: 0 }; return; }
+        p.next = { x: wrapX(stage, cx), y: cy };
+      }
+      p.t += dt * p.speed;
+      if (p.t > 1) p.t = 1;
 
-    function tryJump(p: Player) {
-      if (won) return;
-      if (p.onGround || p.coyote > 0 || p.jumpsLeft > 0) {
-        p.vel.y = -JUMP;
-        if (!p.onGround && p.coyote <= 0) p.jumpsLeft--;
-        p.onGround = false;
-        p.coyote = 0;
-        burst(p.pos.x + p.w / 2, p.pos.y + p.h, p.glow, 8);
+      // eat at current cell when crossing midpoint
+      if (p.t > 0.5) {
+        const eaten = eatAt(stage, p.next.x, p.next.y);
+        if (eaten) {
+          dotsEaten++;
+          if (eaten === "power") stage.powerUntil = performance.now() + 6000;
+          burst((p.next.x + 0.5) * TILE, (p.next.y + 0.5) * TILE, "#ffd76a", eaten === "power" ? 16 : 4);
+          setScore({ dots: dotsEaten, total: stage.totalDots, lives });
+        }
       }
     }
-    function tryDash(p: Player) {
-      if (won || p.dashCd > 0) return;
-      p.vel.x = p.facing * 9.5;
-      p.vel.y = -2;
-      p.dashCd = 60;
-      for (let i = 0; i < 14; i++) burst(p.pos.x + p.w / 2, p.pos.y + p.h / 2, p.glow, 1);
+
+    function stepGhost(g: Ghost, dt: number) {
+      if (g.t >= 1 || (g.dir.x === 0 && g.dir.y === 0)) {
+        g.cell = { ...g.next };
+        g.t = 0;
+        // choose direction toward nearest player (or away if powered)
+        const target = nearestPlayer(g.cell);
+        const opts: Dir[] = [];
+        for (const d of [DIRS.up, DIRS.down, DIRS.left, DIRS.right]) {
+          if (d.x === -g.dir.x && d.y === -g.dir.y && (g.dir.x || g.dir.y)) continue; // no reverse
+          if (!isWall(stage, g.cell.x + d.x, g.cell.y + d.y)) opts.push(d);
+        }
+        if (opts.length === 0) {
+          // allow reverse
+          for (const d of [DIRS.up, DIRS.down, DIRS.left, DIRS.right]) {
+            if (!isWall(stage, g.cell.x + d.x, g.cell.y + d.y)) opts.push(d);
+          }
+        }
+        const powered = performance.now() < stage.powerUntil;
+        let best = opts[0]; let bestScore = powered ? -Infinity : Infinity;
+        for (const d of opts) {
+          const dx = (g.cell.x + d.x) - target.x;
+          const dy = (g.cell.y + d.y) - target.y;
+          const dist = dx*dx + dy*dy;
+          if (powered ? dist > bestScore : dist < bestScore) { bestScore = dist; best = d; }
+        }
+        // 20% random for variety
+        if (Math.random() < 0.2 && opts.length > 1) best = opts[(Math.random()*opts.length)|0];
+        g.dir = best;
+        const nx = g.cell.x + g.dir.x, ny = g.cell.y + g.dir.y;
+        if (isWall(stage, nx, ny)) { g.dir = { x: 0, y: 0 }; return; }
+        g.next = { x: wrapX(stage, nx), y: ny };
+      }
+      const powered = performance.now() < stage.powerUntil;
+      g.t += dt * g.speed * (powered ? 0.6 : 1);
+      if (g.t > 1) g.t = 1;
+    }
+
+    function nearestPlayer(c: Cell): Cell {
+      const dm = (may.cell.x - c.x)**2 + (may.cell.y - c.y)**2;
+      const dc = (cody.cell.x - c.x)**2 + (cody.cell.y - c.y)**2;
+      if (!may.alive) return cody.cell;
+      if (!cody.alive) return may.cell;
+      return dm < dc ? may.cell : cody.cell;
+    }
+
+    function playerPixel(p: Player) {
+      // handle wrap interpolation
+      let fx = p.cell.x + (p.next.x - p.cell.x) * p.t;
+      let fy = p.cell.y + (p.next.y - p.cell.y) * p.t;
+      // detect wrap jump
+      if (Math.abs(p.next.x - p.cell.x) > 1) {
+        const dir = p.cell.x === 0 ? -1 : 1;
+        fx = p.cell.x + dir * p.t;
+      }
+      return { x: (fx + 0.5) * TILE, y: (fy + 0.5) * TILE };
+    }
+    function ghostPixel(g: Ghost) {
+      let fx = g.cell.x + (g.next.x - g.cell.x) * g.t;
+      let fy = g.cell.y + (g.next.y - g.cell.y) * g.t;
+      if (Math.abs(g.next.x - g.cell.x) > 1) {
+        const dir = g.cell.x === 0 ? -1 : 1;
+        fx = g.cell.x + dir * g.t;
+      }
+      return { x: (fx + 0.5) * TILE, y: (fy + 0.5) * TILE };
     }
 
     function burst(x: number, y: number, c: string, n: number) {
@@ -129,192 +367,128 @@ function PlayPage() {
         particles.push({
           x, y,
           vx: (Math.random() - 0.5) * 4,
-          vy: (Math.random() - 0.5) * 4 - 1,
+          vy: (Math.random() - 0.5) * 4,
           life: 30 + Math.random() * 20, c,
         });
       }
     }
 
-    function physics(p: Player, leftK: string, rightK: string) {
-      if (won) { p.vel.x *= 0.8; }
-      else {
-        if (keys.has(leftK)) { p.vel.x -= MOVE; p.facing = -1; }
-        if (keys.has(rightK)) { p.vel.x += MOVE; p.facing = 1; }
-        if (!keys.has(leftK) && !keys.has(rightK)) p.vel.x *= FRICTION;
-      }
-      p.vel.x = Math.max(-MAX_VX * (p.dashCd > 50 ? 2.2 : 1), Math.min(MAX_VX * (p.dashCd > 50 ? 2.2 : 1), p.vel.x));
-      p.vel.y += GRAV;
-      if (p.vel.y > 16) p.vel.y = 16;
+    let last = performance.now();
+    let raf = 0;
+    function frame(now: number) {
+      const dt = Math.min(0.05, (now - last) / 1000);
+      last = now;
 
-      // X axis
-      p.pos.x += p.vel.x;
-      for (const pl of LEVEL.plats) if (collide(p, pl)) {
-        if (p.vel.x > 0) p.pos.x = pl.x - p.w;
-        else if (p.vel.x < 0) p.pos.x = pl.x + pl.w;
-        p.vel.x = 0;
-      }
-      // Y axis
-      const wasGround = p.onGround;
-      p.onGround = false;
-      p.pos.y += p.vel.y;
-      for (const pl of LEVEL.plats) {
-        if (pl.kind === "may" && p.name !== "May") continue;
-        if (pl.kind === "cody" && p.name !== "Cody") continue;
-        if (collide(p, pl)) {
-          if (p.vel.y > 0) { p.pos.y = pl.y - p.h; p.onGround = true; p.jumpsLeft = p.name === "May" ? 2 : 1; }
-          else if (p.vel.y < 0) p.pos.y = pl.y + pl.h;
-          p.vel.y = 0;
+      if (!stageDone) {
+        stepPlayer(may, dt);
+        stepPlayer(cody, dt);
+        for (const g of ghosts) stepGhost(g, dt);
+
+        // collisions
+        const powered = performance.now() < stage.powerUntil;
+        for (const g of ghosts) {
+          for (const p of [may, cody]) {
+            if (!p.alive) continue;
+            const pp = playerPixel(p), gp = ghostPixel(g);
+            if (Math.hypot(pp.x - gp.x, pp.y - gp.y) < TILE * 0.6) {
+              if (powered) {
+                burst(gp.x, gp.y, g.color, 20);
+                g.cell = { ...g.home }; g.next = { ...g.home }; g.dir = { x: 0, y: 0 }; g.t = 0;
+              } else {
+                lives--;
+                burst(pp.x, pp.y, p.glow, 30);
+                if (lives <= 0) {
+                  setStatus("won"); // game over screen reuses overlay; show as "Caught."
+                  stageDone = true;
+                  setScore({ dots: dotsEaten, total: stage.totalDots, lives: 0 });
+                } else {
+                  resetPositions();
+                  setScore({ dots: dotsEaten, total: stage.totalDots, lives });
+                }
+              }
+            }
+          }
+        }
+
+        // stage cleared
+        if (!stageDone && dotsEaten >= stage.totalDots) {
+          stageDone = true;
+          setStatus("won");
         }
       }
-      if (wasGround && !p.onGround && p.vel.y >= 0) p.coyote = 8;
-      else if (p.coyote > 0) p.coyote--;
-      if (p.dashCd > 0) p.dashCd--;
 
-      // bounds
-      if (p.pos.x < 0) p.pos.x = 0;
-      if (p.pos.x + p.w > W) p.pos.x = W - p.w;
-      if (p.pos.y > H) { Object.assign(p.pos, p.name === "May" ? LEVEL.spawnA : LEVEL.spawnB); p.vel.x = p.vel.y = 0; }
+      particles = particles.filter(pp => pp.life > 0);
+      particles.forEach(pp => { pp.x += pp.vx; pp.y += pp.vy; pp.life--; });
+
+      render();
+      raf = requestAnimationFrame(frame);
     }
 
-    function collide(p: Player, r: { x: number; y: number; w: number; h: number }) {
-      return p.pos.x < r.x + r.w && p.pos.x + p.w > r.x && p.pos.y < r.y + r.h && p.pos.y + p.h > r.y;
-    }
-    function overlapRect(a: {x:number;y:number;w:number;h:number}, b: {x:number;y:number;w:number;h:number}) {
-      return a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y;
-    }
+    function render() {
+      const W = canvas.width, H = canvas.height;
+      const bg = ctx.createLinearGradient(0, 0, 0, H);
+      bg.addColorStop(0, "#0c0a1f"); bg.addColorStop(1, "#1a0d24");
+      ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
 
-    let raf = 0;
-    function frame() {
-      physics(may, "a", "d");
-      physics(cody, "arrowleft", "arrowright");
-
-      // pads
-      pads.forEach(pad => {
-        const target = pad.owner === "may" ? may : cody;
-        const on =
-          target.pos.x + target.w > pad.x &&
-          target.pos.x < pad.x + pad.w &&
-          Math.abs(target.pos.y + target.h - pad.y) < 4;
-        pad.pressed = on;
-      });
-      const doorOpen = pads.every(p => p.pressed);
-
-      // coins
-      for (const c of coins) {
-        if (c.taken) continue;
-        for (const pl of [may, cody]) {
-          if (Math.hypot(c.x - (pl.pos.x + pl.w/2), c.y - (pl.pos.y + pl.h/2)) < 18) {
-            c.taken = true; coinsCollected++; burst(c.x, c.y, "#ffd76a", 12);
-            setScore(s => ({ ...s, coins: coinsCollected }));
+      // maze
+      for (let y = 0; y < stage.H; y++) {
+        for (let x = 0; x < stage.W; x++) {
+          const c = stage.grid[y][x];
+          const px = x * TILE, py = y * TILE;
+          if (c === "#") {
+            ctx.fillStyle = "#1e2a6a";
+            ctx.fillRect(px + 2, py + 2, TILE - 4, TILE - 4);
+            ctx.strokeStyle = "#4a6aff";
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(px + 2.5, py + 2.5, TILE - 5, TILE - 5);
+          } else if (c === ".") {
+            ctx.fillStyle = "#ffd76a";
+            ctx.beginPath();
+            ctx.arc(px + TILE/2, py + TILE/2, 2.5, 0, Math.PI * 2);
+            ctx.fill();
+          } else if (c === "o") {
+            ctx.save();
+            ctx.shadowColor = "#ffd76a"; ctx.shadowBlur = 14;
+            ctx.fillStyle = "#ffd76a";
+            ctx.beginPath();
+            const r = 6 + Math.sin(performance.now() / 200) * 1.5;
+            ctx.arc(px + TILE/2, py + TILE/2, r, 0, Math.PI * 2);
+            ctx.fill();
+            ctx.restore();
           }
         }
       }
 
-      // win
-      if (doorOpen && !won) {
-        const inDoorA = overlapRect({x: may.pos.x, y: may.pos.y, w: may.w, h: may.h}, LEVEL.door);
-        const inDoorB = overlapRect({x: cody.pos.x, y: cody.pos.y, w: cody.w, h: cody.h}, LEVEL.door);
-        if (inDoorA && inDoorB) {
-          won = true;
-          setStatus("won");
-          setScore({ coins: coinsCollected, time: Math.round((performance.now() - t0) / 1000) });
-          for (let i = 0; i < 80; i++) burst(LEVEL.door.x + 30, LEVEL.door.y + 50, i % 2 ? may.glow : cody.glow, 1);
-        }
-      }
-
       // particles
-      particles = particles.filter(p => p.life > 0);
-      particles.forEach(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life--; });
-
-      // ---- render ----
-      // sky
-      const g = ctx.createLinearGradient(0, 0, 0, H);
-      g.addColorStop(0, "#1a1d3a");
-      g.addColorStop(0.6, "#2a1638");
-      g.addColorStop(1, "#3a1820");
-      ctx.fillStyle = g; ctx.fillRect(0, 0, W, H);
-
-      // distant glow
-      const r1 = ctx.createRadialGradient(180, 200, 10, 180, 200, 260);
-      r1.addColorStop(0, "rgba(90,169,255,0.35)"); r1.addColorStop(1, "transparent");
-      ctx.fillStyle = r1; ctx.fillRect(0, 0, W, H);
-      const r2 = ctx.createRadialGradient(780, 220, 10, 780, 220, 260);
-      r2.addColorStop(0, "rgba(255,90,77,0.35)"); r2.addColorStop(1, "transparent");
-      ctx.fillStyle = r2; ctx.fillRect(0, 0, W, H);
-
-      // platforms
-      for (const pl of LEVEL.plats) {
-        let col = "#3a2f5a";
-        if (pl.kind === "may") col = "rgba(90,169,255,0.55)";
-        else if (pl.kind === "cody") col = "rgba(255,90,77,0.55)";
-        ctx.fillStyle = col;
-        roundRect(ctx, pl.x, pl.y, pl.w, pl.h, 4); ctx.fill();
-        ctx.fillStyle = "rgba(255,255,255,0.08)";
-        ctx.fillRect(pl.x, pl.y, pl.w, 2);
-      }
-
-      // pads
-      for (const pad of pads) {
-        ctx.fillStyle = pad.owner === "may" ? "#5aa9ff" : "#ff5a4d";
-        ctx.globalAlpha = pad.pressed ? 1 : 0.4;
-        roundRect(ctx, pad.x, pad.y + (pad.pressed ? 4 : 0), pad.w, pad.h - (pad.pressed ? 4 : 0), 3); ctx.fill();
-        ctx.globalAlpha = 1;
-      }
-
-      // door
-      const doorGlow = pads.every(p => p.pressed);
-      ctx.save();
-      if (doorGlow) {
-        ctx.shadowColor = "#ffd76a"; ctx.shadowBlur = 40;
-      }
-      const dg = ctx.createLinearGradient(LEVEL.door.x, LEVEL.door.y, LEVEL.door.x, LEVEL.door.y + LEVEL.door.h);
-      dg.addColorStop(0, doorGlow ? "#ffd76a" : "#4a3a6a");
-      dg.addColorStop(1, doorGlow ? "#ff8a3a" : "#2a1f3a");
-      ctx.fillStyle = dg;
-      roundRect(ctx, LEVEL.door.x, LEVEL.door.y, LEVEL.door.w, LEVEL.door.h, 8); ctx.fill();
-      ctx.restore();
-      ctx.fillStyle = "rgba(255,255,255,0.1)";
-      ctx.fillRect(LEVEL.door.x + 8, LEVEL.door.y + 12, 6, LEVEL.door.h - 24);
-
-      // coins
-      for (const c of coins) {
-        if (c.taken) continue;
-        ctx.save();
-        ctx.shadowColor = "#ffd76a"; ctx.shadowBlur = 12;
-        ctx.fillStyle = "#ffd76a";
-        ctx.beginPath();
-        ctx.arc(c.x, c.y + Math.sin((performance.now() + c.x) / 300) * 3, 6, 0, Math.PI * 2);
-        ctx.fill();
-        ctx.restore();
-      }
-
-      // particles
-      for (const p of particles) {
-        ctx.globalAlpha = Math.min(1, p.life / 30);
-        ctx.fillStyle = p.c;
-        ctx.fillRect(p.x, p.y, 3, 3);
+      for (const pp of particles) {
+        ctx.globalAlpha = Math.min(1, pp.life / 30);
+        ctx.fillStyle = pp.c;
+        ctx.fillRect(pp.x, pp.y, 3, 3);
       }
       ctx.globalAlpha = 1;
 
+      // ghosts
+      const powered = performance.now() < stage.powerUntil;
+      for (const g of ghosts) {
+        const gp = ghostPixel(g);
+        drawGhost(ctx, gp.x, gp.y, powered ? "#5aa9ff" : g.color, powered);
+      }
+
       // players
-      drawPlayer(ctx, may);
-      drawPlayer(ctx, cody);
-
-      // hud overlay
-      ctx.fillStyle = "rgba(255,255,255,0.5)";
-      ctx.font = "10px monospace";
-      ctx.fillText("MAY: WASD · S = dash", 12, 18);
-      ctx.fillText("CODY: ARROWS · ↓ = dash", W - 180, 18);
-
-      raf = requestAnimationFrame(frame);
+      for (const p of [may, cody]) {
+        if (!p.alive) continue;
+        const pp = playerPixel(p);
+        drawPac(ctx, pp.x, pp.y, p.color, p.glow, p.dir);
+      }
     }
-    raf = requestAnimationFrame(frame);
 
+    raf = requestAnimationFrame(frame);
     return () => {
       cancelAnimationFrame(raf);
       window.removeEventListener("keydown", onDown);
       window.removeEventListener("keyup", onUp);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -331,20 +505,35 @@ function PlayPage() {
         </button>
       </div>
 
+      <div className="flex items-center gap-6 text-xs uppercase tracking-[0.25em] text-muted-foreground">
+        <span>Stage <span className="text-foreground font-bold">{stageIdx + 1}</span> / {STAGES.length}</span>
+        <span>Dots <span className="text-accent font-bold">{score.dots}</span> / {score.total}</span>
+        <span>Lives <span className="text-cody font-bold">{"♥".repeat(Math.max(0, score.lives))}</span></span>
+      </div>
+
       <div className="relative w-full max-w-4xl">
-        <canvas ref={canvasRef} width={W} height={H}
+        <canvas ref={canvasRef}
           className="w-full h-auto rounded-sm border border-border bg-background block" />
         {status === "won" && (
           <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-md rounded-sm">
             <div className="text-center space-y-4">
               <Trophy className="w-12 h-12 mx-auto text-accent animate-pulse-glow" />
-              <h2 className="font-display font-black text-5xl text-duo italic">Together.</h2>
+              <h2 className="font-display font-black text-5xl text-duo italic">
+                {score.lives <= 0 ? "Caught." : "Cleared."}
+              </h2>
               <p className="text-muted-foreground">
-                {score.coins} / {LEVEL.coins.length} hearts · {score.time}s
+                {score.dots} / {score.total} dots · Stage {stageIdx + 1}
               </p>
-              <button onClick={() => location.reload()} className="bg-duo text-primary-foreground px-8 py-3 text-xs uppercase tracking-[0.2em] font-bold rounded-sm">
-                Play Again
-              </button>
+              <div className="flex gap-3 justify-center">
+                {score.lives > 0 && stageIdx + 1 < STAGES.length && (
+                  <button onClick={() => advanceRef.current()} className="bg-duo text-primary-foreground px-8 py-3 text-xs uppercase tracking-[0.2em] font-bold rounded-sm">
+                    Next Stage →
+                  </button>
+                )}
+                <button onClick={() => location.reload()} className="border border-border text-foreground px-8 py-3 text-xs uppercase tracking-[0.2em] font-bold rounded-sm">
+                  Restart
+                </button>
+              </div>
             </div>
           </div>
         )}
@@ -352,12 +541,12 @@ function PlayPage() {
 
       <div className="grid grid-cols-2 gap-3 w-full max-w-4xl text-xs">
         <ControlCard color="may" name="May" icon={<Snowflake className="w-4 h-4" />}
-          keys={[["A / D", "move"], ["W", "double jump"], ["S", "dash"]]} />
+          keys={[["W A S D", "move through maze"]]} />
         <ControlCard color="cody" name="Cody" icon={<Flame className="w-4 h-4" />}
-          keys={[["← / →", "move"], ["↑", "jump"], ["↓", "dash"]]} />
+          keys={[["← ↑ → ↓", "move through maze"]]} />
       </div>
       <p className="text-xs text-muted-foreground uppercase tracking-[0.25em] text-center max-w-xl">
-        Step on both glowing pads to open the door. Then walk through it — together.
+        Eat every dot to clear the stage. Power pellets let you eat ghosts. Press R to restart.
       </p>
     </div>
   );
@@ -381,37 +570,49 @@ function ControlCard({ color, name, icon, keys }: { color: "may" | "cody"; name:
   );
 }
 
-function drawPlayer(ctx: CanvasRenderingContext2D, p: Player) {
-  // glow
+function drawPac(ctx: CanvasRenderingContext2D, x: number, y: number, color: string, glow: string, dir: Dir) {
+  const r = TILE * 0.42;
+  const mouth = (Math.sin(performance.now() / 80) + 1) / 2 * 0.5 + 0.05; // 0.05..0.55
+  let angle = 0;
+  if (dir.x === 1) angle = 0;
+  else if (dir.x === -1) angle = Math.PI;
+  else if (dir.y === -1) angle = -Math.PI / 2;
+  else if (dir.y === 1) angle = Math.PI / 2;
   ctx.save();
-  ctx.shadowColor = p.glow; ctx.shadowBlur = 24;
-  ctx.fillStyle = p.color;
-  roundRect(ctx, p.pos.x, p.pos.y, p.w, p.h, 6); ctx.fill();
+  ctx.shadowColor = glow; ctx.shadowBlur = 18;
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.arc(x, y, r, angle + mouth, angle - mouth + Math.PI * 2);
+  ctx.closePath();
+  ctx.fill();
   ctx.restore();
-  // face
-  ctx.fillStyle = "white";
-  const eyeX = p.pos.x + (p.facing > 0 ? 16 : 4);
-  ctx.fillRect(p.pos.x + 6, p.pos.y + 10, 4, 4);
-  ctx.fillRect(p.pos.x + 16, p.pos.y + 10, 4, 4);
-  ctx.fillStyle = "#1a1a2e";
-  ctx.fillRect(eyeX, p.pos.y + 11, 2, 3);
-  // dash trail
-  if (p.dashCd > 50) {
-    ctx.fillStyle = p.glow;
-    for (let i = 1; i < 5; i++) {
-      ctx.globalAlpha = 0.3 - i * 0.05;
-      ctx.fillRect(p.pos.x - p.facing * i * 6, p.pos.y, p.w, p.h);
-    }
-    ctx.globalAlpha = 1;
-  }
 }
 
-function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+function drawGhost(ctx: CanvasRenderingContext2D, x: number, y: number, color: string, scared: boolean) {
+  const r = TILE * 0.42;
+  ctx.save();
+  ctx.shadowColor = color; ctx.shadowBlur = 12;
+  ctx.fillStyle = color;
   ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
+  ctx.arc(x, y - 2, r, Math.PI, 0);
+  ctx.lineTo(x + r, y + r);
+  // wavy bottom
+  const steps = 4;
+  for (let i = 0; i < steps; i++) {
+    const x1 = x + r - (2 * r) * ((i + 0.5) / steps);
+    const y1 = y + r - 4 + ((i % 2) ? 4 : 0);
+    ctx.lineTo(x1, y1);
+  }
+  ctx.lineTo(x - r, y + r);
   ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+  // eyes
+  ctx.fillStyle = "white";
+  ctx.beginPath(); ctx.arc(x - 5, y - 2, 3.2, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + 5, y - 2, 3.2, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = scared ? "#fff" : "#1a1a2e";
+  ctx.beginPath(); ctx.arc(x - 5, y - 1, 1.6, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x + 5, y - 1, 1.6, 0, Math.PI * 2); ctx.fill();
 }
