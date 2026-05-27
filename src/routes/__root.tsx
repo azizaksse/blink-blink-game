@@ -112,13 +112,20 @@ function RootShell({ children }: { children: React.ReactNode }) {
   );
 }
 
+import { ConvexProvider, ConvexReactClient } from "convex/react";
+
+const convexUrl = import.meta.env.VITE_CONVEX_URL || "https://dummy.convex.cloud";
+const convex = new ConvexReactClient(convexUrl);
+
 function RootComponent() {
   const { queryClient } = Route.useRouteContext();
 
   return (
-    <QueryClientProvider client={queryClient}>
-      {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
-      <Outlet />
-    </QueryClientProvider>
+    <ConvexProvider client={convex}>
+      <QueryClientProvider client={queryClient}>
+        {/* Required: nested routes render here. Removing <Outlet /> breaks all child routes. */}
+        <Outlet />
+      </QueryClientProvider>
+    </ConvexProvider>
   );
 }
